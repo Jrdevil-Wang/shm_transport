@@ -11,11 +11,11 @@ And we employ boost::interprocess::managed_shared_memory to accomplish
 it.
 
 But shared memory is lack of synchronization method like poll/epoll
-for socket. Even inotify does not support generating a notification when
-the shared memory region is written or updated. Therefore, we use the
-origin transport (udp or tcp) to send the handle (essentially, an offset
-pointer) from publishers to subscribers.
+for socket. Even inotify does not support generating a notification
+when the shared memory region is written or updated. Therefore, we
+use the original transport (udp or tcp) to send the handle (essentially,
+an offset pointer) from publishers to subscribers.
 
-The hardest part is life-time management of the messages. We need
-to deallocate messages when no subscribers use them (as soon as possible).
+The hardest part is life-time management of the messages. We need to
+deallocate messages when no subscribers use them (as soon as possible).
 We are still improving this issue.
