@@ -18,13 +18,14 @@ namespace shm_transport {
 
     public:
       ~Publisher() {
-        boost::atomic<uint32_t> * ref_ptr = pshm_->find_or_construct<boost::atomic<uint32_t> >("ref")(0);
-        if (ref_ptr->fetch_sub(1, boost::memory_order_relaxed) == 1) {
-          boost::interprocess::shared_memory_object::remove(pub_->getTopic().c_str());
-          ROS_INFO("shm file <%s>　removed\n", pub_->getTopic().c_str());
-        }
-        if (pshm_)
+        if (pshm_) {
+          boost::atomic<uint32_t> * ref_ptr = pshm_->find_or_construct<boost::atomic<uint32_t> >("ref")(0);
+          if (ref_ptr->fetch_sub(1, boost::memory_order_relaxed) == 1) {
+            boost::interprocess::shared_memory_object::remove(pub_->getTopic().c_str());
+            ROS_INFO("shm file <%s>　removed\n", pub_->getTopic().c_str());
+          }
           delete pshm_;
+        }
         if (pub_)
           shutdown();
       }
