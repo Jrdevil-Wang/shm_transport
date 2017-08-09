@@ -205,4 +205,3 @@ add_dependencies(shm_talker shm_transport_generate_messages_cpp)
 add_executable(shm_listener test/shm_listener.cpp)
 target_link_libraries(shm_listener ${catkin_LIBRARIES} -lrt)
 add_dependencies(shm_listener shm_transport_generate_messages_cpp)
-
