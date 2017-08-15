@@ -2,130 +2,108 @@
 #define __SHM_SUBSCRIBER_HPP__
 
 #include <boost/interprocess/managed_shared_memory.hpp>
-#include <boost/atomic/atomic.hpp>
 #include "ros/ros.h"
 #include "std_msgs/UInt64.h"
+#include "shm_object.hpp"
 
-namespace shm_transport {
+namespace shm_transport
+{
 
-  class Topic;
+class Topic;
 
-  template <class M>
-  class Subscriber;
+template <class M>
+class Subscriber;
 
-  template < class M >
-  class SubscriberCallbackHelper {
-    typedef void (*Func)(const boost::shared_ptr< const M > &);
+template < class M >
+class SubscriberCallbackHelper
+{
+  typedef void (*Func)(const boost::shared_ptr< const M > &);
 
-  private:
-    SubscriberCallbackHelper(const std::string &topic, Func fp)
-      : pshm_(NULL), topic_(topic), fp_(fp), sub_((ros::Subscriber *)NULL) {
+public:
+  ~SubscriberCallbackHelper() {
+  }
 
+  void callback(const std_msgs::UInt64::ConstPtr & actual_msg) {
+    if (!pobj_) {
+      // If suscriber runs first, it will not die due to these code.
+      mng_shm * pshm = new mng_shm(boost::interprocess::open_only, name_.c_str());
+      pobj_ = ShmObjectPtr(new ShmObject(pshm, name_, true));
+      // discard the first ros message, becuase shm publisher did not know this subscriber exists yet
+      return;
     }
+    // get shm message
+    ShmMessage * ptr = (ShmMessage *)pobj_->pshm_->get_address_from_handle(actual_msg->data);
+    // deserialize data
+    boost::shared_ptr< M > msg(new M());
+    ros::serialization::IStream in(ptr->data, ptr->len);
+    ros::serialization::deserialize(in, *msg);
+    // destruct shm message
+    ptr->destruct(pobj_);
+    // call user callback
+    fp_(msg);
+  }
 
-  public:
-    ~SubscriberCallbackHelper() {
-      if (pshm_) {
-          boost::atomic<uint32_t> *ref_ptr = pshm_->find_or_construct<boost::atomic<uint32_t> >("ref")(0);
-          if (ref_ptr->fetch_sub(1, boost::memory_order_relaxed) == 1) {
-              if(sub_) {
-                  boost::interprocess::shared_memory_object::remove(sub_->getTopic().c_str());
-                  //printf("subscriber: shm file <%s> removed\n", sub_->getTopic().c_str());
-                }
-            }
-          delete pshm_;
-        }
-    }
+private:
+  SubscriberCallbackHelper(const std::string &topic, Func fp)
+    : pobj_(), name_(topic), fp_(fp) {
+    // change '/' in topic to '_'
+    for (int i = 0; i < name_.length(); i++)
+      if (name_[i] == '/')
+        name_[i] = '_';
+  }
 
-    void callback(const std_msgs::UInt64::ConstPtr & actual_msg) {
-      if (!pshm_) {   //a small trick. If suscriber runs first, it will not die due to these code.
-          pshm_ = new boost::interprocess::managed_shared_memory(boost::interprocess::open_only, topic_.c_str());
-          boost::atomic<uint32_t> *ref_ptr = pshm_->find_or_construct<boost::atomic<uint32_t> >("ref")(0);
-          ref_ptr->fetch_add(1, boost::memory_order_relaxed);
-        }
-      // FIXME this segment should be locked
-      uint32_t * ptr = (uint32_t *)pshm_->get_address_from_handle(actual_msg->data);
-      M msg;
-      ros::serialization::IStream in((uint8_t *)(ptr + 2), ptr[1]);
-      ros::serialization::deserialize(in, msg);
-      // FIXME is boost::atomic rely on x86?
-      if (reinterpret_cast< boost::atomic< uint32_t > * >(ptr)->fetch_sub(1, boost::memory_order_relaxed) == 1) {
-          pshm_->deallocate(ptr);
-        }
+  ShmObjectPtr pobj_;
+  std::string name_;
+  Func fp_;
 
-      fp_(boost::make_shared< M >(msg));
-    }
+friend class Topic;
+friend class Subscriber<M>;
+};
 
-  private:
-    boost::interprocess::managed_shared_memory * pshm_;
-    std::string topic_;
-    Func fp_;
-    boost::shared_ptr< ros::Subscriber > sub_;
+template <class M>
+class Subscriber
+{
+public:
+  Subscriber() {
+  }
 
-    friend class Topic;
-    friend class Subscriber<M>;
-  };
+  ~Subscriber() {
+  }
 
-  template <class M>
-  class Subscriber {
-  private:
-    Subscriber(const ros::Subscriber & sub_, SubscriberCallbackHelper< M > * phlp) {
-      impl_ = boost::make_shared<Impl>();
+  Subscriber(const Subscriber & s) {
+    *this = s;
+  }
 
-      impl_->sub = boost::make_shared< ros::Subscriber >(sub_);
-      impl_->phlp = phlp;
-      impl_->phlp->sub_ = boost::make_shared< ros::Subscriber >(sub_);
-    }
+  Subscriber & operator = (const Subscriber & s) {
+    sub_ = s.sub_;
+    phlp_ = s.phlp_;
+    return *this;
+  }
 
-    class Impl {
-    public:
-      Impl() {
-      }
+  void shutdown() {
+    sub_.shutdown();
+  }
 
-      ~Impl() {
-        if (phlp) {
-            delete phlp;
-          }
-        if (sub) {
-            sub->shutdown();
-          }
-      }
+  std::string getTopic() const {
+    return sub_.getTopic();
+  }
 
-      boost::shared_ptr< ros::Subscriber > sub;
-      SubscriberCallbackHelper< M > * phlp;
-    };
+  uint32_t getNumPublishers() const {
+    return sub_.getNumPublishers();
+  }
 
-    boost::shared_ptr<Impl> impl_;
+private:
+  Subscriber(const ros::Subscriber & sub, SubscriberCallbackHelper< M > * phlp)
+      : sub_(sub), phlp_(phlp) {
+  }
 
-  public:
-    Subscriber() {
-    }
+  ros::Subscriber sub_;
+  boost::shared_ptr< SubscriberCallbackHelper< M > > phlp_;
 
-    ~Subscriber() {
-    }
+friend class Topic;
+};
 
-    Subscriber(const Subscriber & s) {
-      impl_ = s.impl_;
-    }
-
-    void shutdown() {
-      impl_->sub->shutdown();
-    }
-
-    std::string getTopic() const {
-      return impl_->sub->getTopic();
-    }
-
-    uint32_t getNumPublishers() const {
-      return impl_->sub->getNumPublishers();
-    }
-
-  protected:
-
-    friend class Topic;
-  };
-
-}
+} // namespace shm_transport
 
 #endif // __SHM_SUBSCRIBER_HPP__
 

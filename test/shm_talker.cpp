@@ -3,28 +3,28 @@
 #include <sstream>
 #include "shm_topic.hpp"
 
-#define MSGLEN (1024 * 1024 * 3)
-#define HZ (60)
+#define MSGLEN (1920 * 1080 * 3)
+#define HZ (30)
+
+std::string str(MSGLEN, '-');
+char tmp[100];
 
 int main(int argc, char ** argv) {
   ros::init(argc, argv, "shm_talker", ros::init_options::AnonymousName);
   ros::NodeHandle n;
   shm_transport::Topic t(n);
-  shm_transport::Publisher p = t.advertise< std_msgs::String >("shm_test_topic", HZ, HZ * MSGLEN);
+  shm_transport::Publisher p = t.advertise< std_msgs::String >("shm_test_topic", HZ, 3 * MSGLEN);
 
   ros::Rate loop_rate(HZ);
   int count = 0;
   while (ros::ok()) {
-    std::stringstream ss;
-    ss << "message #" << count << "...";
-    std::string info = ss.str();
+    int len = snprintf(tmp, 100, "message # %d ...", count);
+    memcpy(&str[0], tmp, len);
 
-    for (int i = 0; i < MSGLEN - 20; i++)
-        ss << " ";
     std_msgs::String msg;
-    msg.data = ss.str();
+    msg.data = str;
 
-    ROS_INFO("info: [%s]", info.c_str());
+    ROS_INFO("info: [%s]", tmp);
     p.publish(msg);
 
     ros::spinOnce();
@@ -33,3 +33,4 @@ int main(int argc, char ** argv) {
   }
   return 0;
 }
+
