@@ -42,10 +42,18 @@ public:
       uint32_t serlen = ros::serialization::serializationLength(msg);
       ShmMessage * ptr = NULL;
       // bad_alloc exception may occur if some ros messages are lost
-      for (int i = 0; i < RETRY && ptr == NULL; i++) {
+      int attempt = 0;
+      for (; attempt < RETRY && ptr == NULL; attempt++) {
         try {
           ptr = (ShmMessage *)pobj_->pshm_->allocate(sizeof(ShmMessage) + serlen);
         } catch (boost::interprocess::bad_alloc e) {
+          // ROS_INFO("bad_alloc happened, releasing the oldest and trying again...");
+          ShmMessage * first_msg =
+            (ShmMessage *)pobj_->pshm_->get_address_from_handle(pobj_->pmsg_->getFirstHandle());
+          if (first_msg->ref != 0) {
+            ROS_WARN("the oldest is in use, abandon this message <%p>...", &msg);
+            break;
+          }
           // free the oldest message, and try again
           pobj_->pmsg_->releaseFirst(pobj_->pshm_);
         }
@@ -61,8 +69,10 @@ public:
         std_msgs::UInt64 actual_msg;
         actual_msg.data = pobj_->pshm_->get_handle_from_address(ptr);
         pub_.publish(actual_msg);
+      } else if (attempt >= RETRY) {
+        ROS_WARN("bad_alloc happened %d times, abandon this message <%p>...", attempt, &msg);
       } else {
-        ROS_INFO("bad_alloc happen %d times, abandon this message <%p>...", RETRY, &msg);
+
       }
 #undef RETRY
     } else {

@@ -33,12 +33,14 @@ public:
     }
     // get shm message
     ShmMessage * ptr = (ShmMessage *)pobj_->pshm_->get_address_from_handle(actual_msg->data);
+    // take shm message
+    ptr->take();
     // deserialize data
     boost::shared_ptr< M > msg(new M());
     ros::serialization::IStream in(ptr->data, ptr->len);
     ros::serialization::deserialize(in, *msg);
-    // destruct shm message
-    ptr->destruct(pobj_);
+    // release shm message
+    ptr->release();
     // call user callback
     fp_(msg);
   }

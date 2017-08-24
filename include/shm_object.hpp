@@ -50,6 +50,10 @@ public:
     pshm->deallocate(lc);
   }
 
+  long getFirstHandle() {
+    return next;
+  }
+
 public:
   long next;
   long prev;
@@ -107,23 +111,28 @@ public:
 };
 typedef boost::shared_ptr< ShmObject > ShmObjectPtr;
 
+// message object stored in *shared memory*
 class ShmMessage
 {
 public:
+  // called by publisher
   void construct(const ShmObjectPtr & so) {
     // insert into message list
     so->pmsg_->addLast(&lst, so->pshm_);
-    // set reference count and data length
-    ref = *(so->psub_);
+    // set reference count
+    ref = 0;
   }
 
-  void destruct(const ShmObjectPtr & so) {
-    if (ref.fetch_sub(1, boost::memory_order_relaxed) == 1) {
-      // remove from message list
-      so->pmsg_->remove(&lst, so->pshm_);
-      // deallocate message
-      so->pshm_->deallocate(this);
-    }
+  // called by subscriber
+
+  void take() {
+    ref.fetch_add(1, boost::memory_order_relaxed);
+  }
+
+  void release() {
+    // just decrease the ref counter.
+    // do not deallocate here, publisher will do that
+    ref.fetch_sub(1, boost::memory_order_relaxed);
   }
 
 public:
