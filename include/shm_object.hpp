@@ -62,19 +62,13 @@ public:
 class ShmObject
 {
 public:
-  ShmObject(mng_shm * pshm, std::string name, bool sub)
-      : pshm_(pshm), name_(name), sub_(sub) {
+  ShmObject(mng_shm * pshm, std::string name)
+      : pshm_(pshm), name_(name) {
     pref_ = pshm_->find_or_construct< atomic_uint32_t >("ref")(0);
-    psub_ = pshm_->find_or_construct< uint32_t >("sub")(0);
     plck_ = pshm_->find_or_construct< ipc_mutex >("lck")();
     pmsg_ = pshm_->find_or_construct< MsgListHead >("lst")();
 
     pref_->fetch_add(1, boost::memory_order_relaxed);
-    if (sub_) {
-      plck_->lock();
-      (*psub_)++;
-      plck_->unlock();
-    }
     if (pmsg_->next == 0) {
       long handle = pshm_->get_handle_from_address(pmsg_);
       pmsg_->next = handle;
@@ -86,10 +80,6 @@ public:
     if (pref_->fetch_sub(1, boost::memory_order_relaxed) == 1) {
       boost::interprocess::shared_memory_object::remove(name_.c_str());
       //printf("shm file <%s> removed\n", name_.c_str());
-    } else if (sub_) {
-      plck_->lock();
-      (*psub_)--;
-      plck_->unlock();
     }
   }
 
@@ -98,12 +88,8 @@ public:
   mng_shm_ptr pshm_;
   // name of shm
   std::string name_;
-  // whether this is a subscriber
-  bool sub_;
   // in shm, reference count (pub # + sub #)
   atomic_uint32_t * pref_;
-  // in shm, subscription count (sub #)
-  uint32_t * psub_;
   // in shm, connection lock
   ipc_mutex * plck_;
   // in shm, head node of double-linked message list
@@ -136,10 +122,10 @@ public:
   }
 
 public:
-  MsgListHead		lst;
-  atomic_uint32_t	ref;
-  uint32_t			len;
-  uint8_t			data[0];
+  MsgListHead     lst;
+  atomic_uint32_t ref;
+  uint32_t        len;
+  uint8_t         data[0];
 };
 
 } // namespace shm_transport

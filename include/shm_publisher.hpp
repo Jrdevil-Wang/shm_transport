@@ -35,53 +35,49 @@ public:
     if (!pobj_)
       return;
 
-    pobj_->plck_->lock();
-    if (*(pobj_->psub_) > 0) {
 #define RETRY 2
-      // allocation shm message
-      uint32_t serlen = ros::serialization::serializationLength(msg);
-      ShmMessage * ptr = NULL;
-      // bad_alloc exception may occur if some ros messages are lost
-      int attempt = 0;
-      for (; attempt < RETRY && ptr == NULL; attempt++) {
-        try {
-          ptr = (ShmMessage *)pobj_->pshm_->allocate(sizeof(ShmMessage) + serlen);
-        } catch (boost::interprocess::bad_alloc e) {
-          // ROS_INFO("bad_alloc happened, releasing the oldest and trying again...");
-          ShmMessage * first_msg =
-            (ShmMessage *)pobj_->pshm_->get_address_from_handle(pobj_->pmsg_->getFirstHandle());
-          if (first_msg->ref != 0) {
-            ROS_WARN("the oldest is in use, abandon this message <%p>...", &msg);
-            break;
-          }
-          // free the oldest message, and try again
-          pobj_->pmsg_->releaseFirst(pobj_->pshm_);
+    // allocation shm message
+    uint32_t serlen = ros::serialization::serializationLength(msg);
+    ShmMessage * ptr = NULL;
+    // bad_alloc exception may occur if some ros messages are lost
+    int attempt = 0;
+    for (; attempt < RETRY && ptr == NULL; attempt++) {
+      try {
+        ptr = (ShmMessage *)pobj_->pshm_->allocate(sizeof(ShmMessage) + serlen);
+      } catch (boost::interprocess::bad_alloc e) {
+        pobj_->plck_->lock();
+        // ROS_INFO("bad_alloc happened, releasing the oldest and trying again...");
+        ShmMessage * first_msg =
+          (ShmMessage *)pobj_->pshm_->get_address_from_handle(pobj_->pmsg_->getFirstHandle());
+        if (first_msg->ref != 0) {
+          pobj_->plck_->unlock();
+          ROS_WARN("the oldest is in use, abandon this message <%p>...", &msg);
+          break;
         }
+        // free the oldest message, and try again
+        pobj_->pmsg_->releaseFirst(pobj_->pshm_);
+        pobj_->plck_->unlock();
       }
-      if (ptr) {
-        // construct shm message
-        ptr->construct(pobj_);
-        // serialize data
-        ptr->len = serlen;
-        ros::serialization::OStream out(ptr->data, serlen);
-        ros::serialization::serialize(out, msg);
-        // publish the real message (handle of ShmStruct)
-        std_msgs::UInt64 actual_msg;
-        actual_msg.data = pobj_->pshm_->get_handle_from_address(ptr);
-        pub_.publish(actual_msg);
-      } else if (attempt >= RETRY) {
-        ROS_WARN("bad_alloc happened %d times, abandon this message <%p>...", attempt, &msg);
-      } else {
-
-      }
-#undef RETRY
-    } else {
-      // publish the dummy message, notify any new subscribers
-      std_msgs::UInt64 actual_msg;
-      actual_msg.data = 0;
-      pub_.publish(actual_msg);
     }
-    pobj_->plck_->unlock();
+    if (ptr) {
+      // construct shm message
+      pobj_->plck_->lock();
+      ptr->construct(pobj_);
+      pobj_->plck_->unlock();
+      // serialize data
+      ptr->len = serlen;
+      ros::serialization::OStream out(ptr->data, serlen);
+      ros::serialization::serialize(out, msg);
+      // publish the real message (handle of ShmStruct)
+      std_msgs::UInt64 actual_msg;
+      actual_msg.data = pobj_->pshm_->get_handle_from_address(ptr);
+      pub_.publish(actual_msg);
+    } else if (attempt >= RETRY) {
+      ROS_WARN("bad_alloc happened %d times, abandon this message <%p>...", attempt, &msg);
+    } else {
+
+    }
+#undef RETRY
   }
 
   void shutdown() {
@@ -105,7 +101,7 @@ private:
       if (t[i] == '/')
         t[i] = '_';
     mng_shm * pshm = new mng_shm(boost::interprocess::open_or_create, t.c_str(), mem_size);
-    pobj_ = ShmObjectPtr(new ShmObject(pshm, t, false));
+    pobj_ = ShmObjectPtr(new ShmObject(pshm, t));
   }
 
   ros::Publisher pub_;

@@ -27,9 +27,7 @@ public:
     if (!pobj_) {
       // If suscriber runs first, it will not die due to these code.
       mng_shm * pshm = new mng_shm(boost::interprocess::open_only, name_.c_str());
-      pobj_ = ShmObjectPtr(new ShmObject(pshm, name_, true));
-      // discard the first ros message, becuase shm publisher did not know this subscriber exists yet
-      return;
+      pobj_ = ShmObjectPtr(new ShmObject(pshm, name_));
     }
     // get shm message
     ShmMessage * ptr = (ShmMessage *)pobj_->pshm_->get_address_from_handle(actual_msg->data);
