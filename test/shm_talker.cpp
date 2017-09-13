@@ -1,7 +1,7 @@
 #include "ros/ros.h"
 #include "std_msgs/String.h"
 #include <sstream>
-#include "shm_topic.hpp"
+#include "shm_transport/shm_topic.hpp"
 
 #define MSGLEN (1920 * 1080 * 3)
 #define HZ (30)

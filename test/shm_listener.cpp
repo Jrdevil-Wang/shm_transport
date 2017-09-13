@@ -1,6 +1,6 @@
 #include "ros/ros.h"
 #include "std_msgs/String.h"
-#include "shm_topic.hpp"
+#include "shm_transport/shm_topic.hpp"
 
 void chatterCallback(const std_msgs::String::ConstPtr & msg) {
   char str[21] = {'\0'};
