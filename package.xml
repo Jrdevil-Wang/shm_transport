@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package>
   <name>shm_transport</name>
-  <version>0.0.0</version>
-  <description>The shm_transport package</description>
+  <version>0.0.1</version>
+  <description>The shared memory transport package</description>
 
   <!-- One maintainer tag required, multiple allowed, one person per tag --> 
   <!-- Example:  -->
@@ -20,12 +20,15 @@
   <!-- Optional attribute type can be: website, bugtracker, or repository -->
   <!-- Example: -->
   <!-- <url type="website">http://wiki.ros.org/shm_transport</url> -->
+  <url type="repository">https://github.com/Jrdevil-Wang/shm_transport</url>
 
 
   <!-- Author tags are optional, multiple are allowed, one per tag -->
   <!-- Authors do not have to be maintainers, but could be -->
   <!-- Example: -->
   <!-- <author email="jane.doe@example.com">Jane Doe</author> -->
+  <author email="stu_981523@163.com">Jrdevil-Wang</author>
+  <author email="twd2@163.com">Wende Tan</author>
 
 
   <!-- The *_depend tags are used to specify dependencies -->
