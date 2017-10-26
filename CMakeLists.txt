@@ -8,7 +8,7 @@ project(shm_transport)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
-  roscpp std_msgs sensor_msgs genmsg
+  roscpp std_msgs genmsg
 )
 
 ## System dependencies are found with CMake's conventions
